@@ -32,11 +32,19 @@ def process_csv_for_phone_extraction():
         
         print(f"Processing {len(df)} records...")
         
-        # Lists to store results and rows to remove
-        successful_matches = []
-        rows_to_remove = []
+        # Create result.csv file immediately with headers
+        result_file = 'result.csv'
+        result_file_exists = os.path.exists(result_file)
         
-        # Process each row
+        if not result_file_exists:
+            # Create new result.csv with headers
+            result_df = pd.DataFrame(columns=['first_name', 'phone_number'])
+            result_df.to_csv(result_file, index=False)
+            print(f"Created {result_file} file")
+        else:
+            print(f"Using existing {result_file} file")
+        
+        # Process each row one by one
         for index, row in df.iterrows():
             email = row['email']
             first_name = row['first_name']
@@ -49,7 +57,10 @@ def process_csv_for_phone_extraction():
                 
                 if not snippets:
                     print(f"  No snippets found for {email}")
-                    rows_to_remove.append(index)
+                    # Delete this row from original CSV immediately
+                    df = df.drop(index)
+                    df.to_csv(csv_file_path, index=False)
+                    print(f"  ✓ Deleted row from original CSV (no snippets)")
                     continue
                 
                 # Step 2: Extract phone numbers from snippets
@@ -57,7 +68,10 @@ def process_csv_for_phone_extraction():
                 
                 if not phone_numbers:
                     print(f"  No phone numbers found for {email}")
-                    rows_to_remove.append(index)
+                    # Delete this row from original CSV immediately
+                    df = df.drop(index)
+                    df.to_csv(csv_file_path, index=False)
+                    print(f"  ✓ Deleted row from original CSV (no phone numbers)")
                     continue
                 
                 print(f"  Found {len(phone_numbers)} phone number(s): {phone_numbers}")
@@ -90,51 +104,52 @@ def process_csv_for_phone_extraction():
                 
                 # Step 4: Handle the result
                 if matched_phone:
-                    # Add to successful matches
-                    successful_matches.append({
+                    # Save immediately to result.csv
+                    new_match = {
                         'first_name': first_name,
                         'phone_number': matched_phone
-                    })
-                    print(f"  ✓ SUCCESS: {first_name} -> {matched_phone}")
+                    }
+                    
+                    # Simple append to result.csv
+                    try:
+                        # Read existing file or create new one
+                        if os.path.exists(result_file):
+                            existing_df = pd.read_csv(result_file)
+                            new_row_df = pd.DataFrame([new_match])
+                            updated_df = pd.concat([existing_df, new_row_df], ignore_index=True)
+                        else:
+                            updated_df = pd.DataFrame([new_match])
+                        
+                        # Save to file
+                        updated_df.to_csv(result_file, index=False)
+                        print(f"  ✓ SUCCESS: {first_name} -> {matched_phone} (saved to {result_file})")
+                        
+                    except Exception as e:
+                        print(f"  ❌ ERROR saving to {result_file}: {str(e)}")
+                        # Continue processing but don't delete the row
+                        continue
+                    
+                    # Delete this row from original CSV immediately after successful save
+                    df = df.drop(index)
+                    df.to_csv(csv_file_path, index=False)
+                    print(f"  ✓ Deleted row from original CSV (successful match)")
+                    
                 else:
                     print(f"  ✗ No matching names found for any phone numbers")
-                
-                # Always remove the row from original CSV (whether successful or not)
-                rows_to_remove.append(index)
+                    # Delete this row from original CSV immediately
+                    df = df.drop(index)
+                    df.to_csv(csv_file_path, index=False)
+                    print(f"  ✓ Deleted row from original CSV (no match)")
                 
             except Exception as e:
                 print(f"  Error processing {email}: {str(e)}")
-                rows_to_remove.append(index)
+                print(f"  ⚠ KEEPING row in original CSV due to technical error")
+                # Don't delete this row - keep it for retry
                 continue
         
-        # Step 5: Save results and update original CSV
-        if successful_matches:
-            # Create or append to result.csv
-            result_df = pd.DataFrame(successful_matches)
-            result_file = 'result.csv'
-            
-            if os.path.exists(result_file):
-                # Append to existing file
-                existing_df = pd.read_csv(result_file)
-                combined_df = pd.concat([existing_df, result_df], ignore_index=True)
-                combined_df.to_csv(result_file, index=False)
-                print(f"\nAppended {len(successful_matches)} successful matches to existing {result_file}")
-            else:
-                # Create new file
-                result_df.to_csv(result_file, index=False)
-                print(f"\nCreated {result_file} with {len(successful_matches)} successful matches")
-        else:
-            print("\nNo successful matches found.")
-        
-        # Step 6: Remove processed rows from original CSV
-        if rows_to_remove:
-            # Remove rows and save back to original file
-            df_updated = df.drop(rows_to_remove)
-            df_updated.to_csv(csv_file_path, index=False)
-            print(f"Removed {len(rows_to_remove)} processed rows from original CSV")
-            print(f"Original CSV now has {len(df_updated)} remaining rows")
-        
-        print("\nProcess completed!")
+        # Step 5: Summary
+        print(f"\nProcess completed!")
+        print(f"Original CSV now has {len(df)} remaining rows")
         
     except Exception as e:
         print(f"Error reading CSV file: {str(e)}")
