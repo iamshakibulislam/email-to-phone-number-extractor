@@ -67,7 +67,8 @@ def extract_phone_numbers(text):
     normalized_numbers = []
     for num in matches:
         norm = normalize(num)
-        if norm and norm not in normalized_numbers:
+        # Only include numbers with minimum 10 digits
+        if norm and len(norm) >= 10 and norm not in normalized_numbers:
             normalized_numbers.append(norm)
     
     return normalized_numbers #returns list of phone numbers found in a python list
